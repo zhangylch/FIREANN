@@ -31,6 +31,7 @@ class GetDensity(torch.nn.Module):
         self.params=nn.parameter.Parameter(torch.ones_like(self.rs))
         self.hyper=nn.parameter.Parameter(torch.nn.init.orthogonal_(torch.ones(self.rs.shape[1],norbit)).\
         unsqueeze(0).unsqueeze(0).repeat(len(ocmod_list)+1,nipsin,1,1))
+        self.ef_para=nn.parameter.Parameter(torch.ones(self.rs.shape[1]))
         ocmod=OrderedDict()
         for i, m in enumerate(ocmod_list):
             f_oc="memssage_"+str(i)
@@ -72,7 +73,7 @@ class GetDensity(torch.nn.Module):
             num+=orbital.shape[0]
         return angular    
 
-    def forward(self,cart,atom_index,local_species,neigh_species):
+    def forward(self,cart,ef,atom_index,local_species,neigh_species):
         """
         # input cart: coordinates (nall,3)
         # input atom_index12(2*maxneigh): store the index of neighbour atoms for each central atom
@@ -81,6 +82,8 @@ class GetDensity(torch.nn.Module):
         # angular: orbital form
         """
         nlocal=local_species.shape[0]
+        ef_orbital = torch.einsum("ji,k->ijk",self.angular(ef.view(1,-1),torch.ones(1,dtype=ef.dtype,device=ef.device)),\
+        self.ef_para).expand(nlocal,-1,-1)
         selected_cart = cart.index_select(0, atom_index.view(-1)).view(2, -1, 3)
         dist_vec = selected_cart[0] - selected_cart[1]
         distances = torch.linalg.norm(dist_vec,dim=-1)
@@ -89,8 +92,7 @@ class GetDensity(torch.nn.Module):
         self.gaussian(distances,neigh_species))
         orb_coeff=self.params.index_select(0,neigh_species)
         worbital=torch.einsum("ijk,ik ->ijk", orbital,orb_coeff)
-        sum_worbital=torch.zeros((nlocal,orbital.shape[1],self.rs.shape[1]),dtype=orb_coeff.dtype,device=orb_coeff.device)
-        sum_worbital=torch.index_add(sum_worbital,0,atom_index[0],worbital)
+        ef_orbital=torch.index_add(ef_orbital,0,atom_index[0],worbital)
         expandpara=self.hyper[0].index_select(0,self.index_para)
-        hyper_worbital=torch.einsum("ijk,jkm -> ijm", sum_worbital,expandpara)
+        hyper_worbital=torch.einsum("ijk,jkm -> ijm", ef_orbital,expandpara)
         return torch.sum(torch.square(hyper_worbital),dim=1)

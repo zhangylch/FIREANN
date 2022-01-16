@@ -3,7 +3,7 @@ from collections import OrderedDict
 from torch import nn
 from torch.nn import Linear,Dropout,BatchNorm1d,Sequential,LayerNorm
 from torch.nn import Softplus,GELU,Tanh,SiLU
-from torch.nn.init import xavier_uniform_,zeros_,constant_
+from torch.nn.init import xavier_normal_,zeros_,constant_
 import numpy as np
 
 class ResBlock(nn.Module):
@@ -22,7 +22,7 @@ class ResBlock(nn.Module):
             if i==nhid-1: 
                 zeros_(linear.weight)
             else:
-                xavier_uniform_(linear.weight)
+                xavier_normal_(linear.weight)
             zeros_(linear.bias)
             modules.append(linear)
         self.resblock=Sequential(*modules)
@@ -51,7 +51,7 @@ class NNMod(torch.nn.Module):
           for ele in atomtype:
               modules=[]
               linear=Linear(nl[0],nl[1])
-              xavier_uniform_(linear.weight)
+              xavier_normal_(linear.weight)
               modules.append(linear)
               for iblock in range(nblock):
                   modules.append( * [ResBlock(nl,dropout_p,actfun,table_norm=table_norm)])

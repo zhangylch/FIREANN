@@ -1,28 +1,57 @@
 import numpy as np
 import torch
 from gpu_sel import *
+<<<<<<< HEAD
+from get_neigh import *
+import re
+
+#====================================Prop_list================================================
+Prop_list=["Energy","Dipole"]
+=======
+from calculate import *
+from write_format import *
+import re
+# unit
+length_a_au=1/5.29177208590000E-01
+Di_de_au=0.393430307
+energy_ev_au=1.0/2.72113838565563E+01
+Di_de_ev= 0.20819434
+Ef_au_ev=51.4221
+#convertor
+factor_energy=energy_ev_au
+factor_dipole=Di_de_au/Di_de_ev
+factor_pol=Di_de_au/Di_de_ev*Ef_au_ev
+convertor=np.array([factor_energy,factor_dipole,factor_pol])
+t_convertor=1.0/convertor
+#====================================Prop_list================================================
+Prop_list=["Energy","Dipole","POL"]
+>>>>>>> my-backup
+pattern=[]
+for prop in Prop_list:
+    if prop!="Force":
+        pattern.append(re.compile(r"(?<={}=)\'(.+?)\'".format(prop)))
+
 # used for select a unoccupied GPU
 gpu_sel()
 # gpu/cpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+<<<<<<< HEAD
 # same as the atomtype in the file input_density
-atomtype=["C","H"]
-mass=torch.tensor([12.001,1.008,1.008,1.008,1.008],dtype=torch.double)
+atomtype=["O","H"]
 #load the serilizable model
 pes=torch.jit.load("EANN_PES_DOUBLE.pt")
 # FLOAT: torch.float32; DOUBLE:torch.double for using float/double in inference
 pes.to(device).to(torch.double)
 # set the eval mode
 pes.eval()
-pes=torch.jit.optimize_for_inference(pes)
+#pes=torch.jit.optimize_for_inference(pes)
+# instantiate the neigh list 
+get_neighlist=Neigh_List(pes.cutoff,1)  # cell linked list algorithm for pbc (linear scaling)
 # save the lattic parameters
 cell=np.zeros((3,3),dtype=np.float64)
-period_table=torch.tensor([0,0,0],dtype=torch.double,device=device)   # same as the pbc in the periodic boundary condition
-npoint=0
-npoint1=0
-rmse1=torch.zeros(2,dtype=torch.double,device=device)
-rmse=torch.zeros(2,dtype=torch.double,device=device)
-with open("/share/home/bjiangch/atnn/data_methane/new_test_validation/test/configuration",'r') as f1:
+period_table=torch.tensor([1,1,1],dtype=torch.double,device=device)   # same as the pbc in the periodic boundary condition
+f2=open('dipole.dat','w')
+with open("/group/zyl/program/external-reann/data/H2O-ef-static/test/configuration",'r') as f1:
     while True:
         string=f1.readline()
         if not string: break
@@ -33,42 +62,126 @@ with open("/share/home/bjiangch/atnn/data_methane/new_test_validation/test/confi
         string=f1.readline()
         cell[2]=np.array(list(map(float,string.split())))
         string=f1.readline()
+        string=f1.readline()
+        abprop=[]
+        for i,ipattern in enumerate(pattern):
+            tmp=re.findall(ipattern,string)
+            abprop.append(np.array(list(map(float,tmp[0].split()))))
         species=[]
         cart=[]
         abforce=[]
+        mass=[]
         while True:
             string=f1.readline()
-            if "abprop" in string: break
+            if "External_field:" in string: 
+                ef=torch.tensor(list(map(float,string.split()[1:4])))
+                break
             tmp=string.split()
             tmp1=list(map(float,tmp[2:8]))
             cart.append(tmp1[0:3])
             abforce.append(tmp1[3:6])
+            mass.append(float(tmp[1]))
             species.append(atomtype.index(tmp[0]))
-        abene=float(string.split()[1])
-        abene=torch.from_numpy(np.array([abene])).to(device)
         species=torch.from_numpy(np.array(species)).to(device)  # from numpy array to torch tensor
         cart=torch.from_numpy(np.array(cart)).to(device).to(torch.double)  # also float32/double
-        abforce=torch.from_numpy(np.array(abforce)).to(device).to(torch.double)  # also float32/double
+        mass=torch.from_numpy(np.array(mass)).to(device).to(torch.double)  # also float32/double
         tcell=torch.from_numpy(cell).to(device).to(torch.double)  # also float32/double
-        energy,force=pes(period_table,cart,tcell,species,mass)
-        energy=energy.detach()
-        force=force.detach()
-        print((energy-abene).cpu().numpy()[0])
-        if torch.abs(energy-abene)<3.0:
-           rmse[0]+=torch.sum(torch.square(energy-abene))
-           rmse[1]+=torch.sum(torch.square(force-abforce))
-           rmse1[0]+=torch.sum(torch.square(energy-abene))
-           rmse1[1]+=torch.sum(torch.square(force-abforce))
-           npoint1+=1
-           npoint+=1
-        else:
-           rmse1[0]+=torch.sum(torch.square(energy-abene))
-           rmse1[1]+=torch.sum(torch.square(force-abforce))
-           npoint1+=1
-rmse=rmse.detach().cpu().numpy()
-rmse1=rmse1.detach().cpu().numpy()
-print(np.sqrt(rmse[0]/npoint))
-print(np.sqrt(rmse[1]/npoint/15))
-print(np.sqrt(rmse1[0]/npoint1))
-print(np.sqrt(rmse1[1]/npoint1/15))
-print(npoint,npoint1)
+        cart=cart.detach().clone()
+        neigh_list, shifts=get_neighlist(period_table,cart,tcell,mass)
+        #cart.requires_grad_(True)
+        ef.requires_grad_(True)
+        atomic_energy=pes(cart,ef,neigh_list,shifts,species)
+        varene=torch.sum(atomic_energy)
+        dipole=-torch.autograd.grad(varene,ef)[0].numpy()
+        print(dipole)
+        for i in range(3):
+            f2.write("{}  {} \n".format(dipole[i],abprop[1][i]))
+f2.close()       
+=======
+# dtype
+torch_dtype=torch.double
+calculator=Calculator(device,torch_dtype)
+# same as the atomtype in the file input_density
+atomtype=["C","O","N","H"]
+# save the lattic parameters
+num=0
+nbatch=20
+batchsize=10
+with open("/group/zyl/data/NMA/b3lyp-ef/configuration",'r') as f1:
+    species=[]
+    cart=[]
+    cell=[]
+    pbc=[]
+    ef=[]
+    abprop=[]
+    while True:
+        string=f1.readline()
+        if not string: break
+        species.append([])
+        cart.append([])
+        cell.append([])
+        pbc.append([])
+        ef.append([])
+        string=f1.readline()
+        cell[num].append(list(map(float,string.split())))
+        string=f1.readline()
+        cell[num].append(list(map(float,string.split())))
+        string=f1.readline()
+        cell[num].append(list(map(float,string.split())))
+        string=f1.readline()
+        pbc[num].append(list(map(float,string.split()[1:4])))
+        string=f1.readline()
+        abprop.append([])
+        for i,ipattern in enumerate(pattern):
+            tmp=re.findall(ipattern,string)
+            abprop[num].append(np.array(list(map(float,tmp[0].split()))))
+
+        while True:
+            string=f1.readline()
+            if "External_field:" in string: 
+                ef[num].append(list(map(float,string.split()[1:4])))
+                break
+            tmp=string.split()
+            tmp1=list(map(float,tmp[2:8]))
+            cart[num].append(tmp1[0:3])
+            species[num].append(atomtype.index(tmp[0]))
+        num+=1
+    species=torch.from_numpy(np.array(species)).to(device)  
+    pbc=torch.from_numpy(np.array(pbc)).to(device).to(torch.long).view(-1,3)
+    cart=torch.from_numpy(np.array(cart)).to(device).to(torch_dtype)  
+    cell=torch.from_numpy(np.array(cell)).to(device).to(torch_dtype)
+    ef=torch.from_numpy(np.array(ef)).to(device).to(torch_dtype).view(-1,3)
+    # neigh list 
+    num=0
+    totnum=ef.shape[0]
+    for m in range(nbatch):
+        neigh_list=torch.empty(2,0).to(device).to(torch.long)
+        shifts=torch.empty(0,3).to(device).to(torch_dtype)
+        num_up=min(num+batchsize,totnum)
+        bcart=cart[num:num_up]
+        bpbc=pbc[num:num_up]
+        bcell=cell[num:num_up]
+        bspecies=species[num:num_up]
+        bef=ef[num:num_up]
+        for i in range(num_up-num):
+            holder=calculator.get_neighlist(bpbc[i],bcart[i],bcell[i])
+            tmp_neigh=holder[0]+i*cart.shape[1]
+            neigh_list=torch.cat((neigh_list,tmp_neigh),1)
+            shifts=torch.cat((shifts,holder[1]),0)
+            num+=1
+        
+        bef.requires_grad=True
+        bcart.requires_grad=False
+        varene,dipole=calculator.get_ene_dipole(bcart,bef,neigh_list,shifts,\
+        bspecies.view(-1))
+        pol=calculator.get_pol(bcart,bef,neigh_list,shifts,bspecies.view(-1))[0]
+        varene=varene.detach().cpu().numpy()
+        dipole=dipole.detach().cpu().numpy()
+        print(pol)
+        pol=pol.view(-1,9).detach().cpu().numpy()
+        init_num=num-bef.shape[0]
+        for i in range(bef.shape[0]):
+            print(abprop[init_num+i][0],varene[i])
+            print(abprop[init_num+i][1],dipole[i])
+            print(abprop[init_num+i][2],pol[i])
+>>>>>>> my-backup

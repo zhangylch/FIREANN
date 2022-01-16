@@ -26,8 +26,9 @@ class GetDensity(torch.nn.Module):
 
         self.register_buffer('index_para',index_para)
         self.params=nn.parameter.Parameter(torch.ones_like(self.rs)/float(neigh_atoms))
-        self.hyper=nn.parameter.Parameter(torch.nn.init.orthogonal_(torch.ones(self.rs.shape[1],norbit)).\
+        self.hyper=nn.parameter.Parameter(torch.nn.init.xavier_normal_(torch.rand(self.rs.shape[1],norbit)).\
         unsqueeze(0).unsqueeze(0).repeat(len(ocmod_list)+1,nipsin,1,1))
+        self.ef_para=nn.parameter.Parameter(torch.ones(self.rs.shape[1]))
         ocmod=OrderedDict()
         for i, m in enumerate(ocmod_list):
             f_oc="memssage_"+str(i)
@@ -69,7 +70,7 @@ class GetDensity(torch.nn.Module):
             num+=orbital.shape[0]
         return angular  
     
-    def forward(self,cart,numatoms,species,atom_index,shifts):
+    def forward(self,cart,ef,numatoms,species,atom_index,shifts):
         """
         # input cart: coordinates (nbatch*numatom,3)
         # input shifts: coordinates shift values (unit cell)
@@ -77,10 +78,15 @@ class GetDensity(torch.nn.Module):
         # atom_index: neighbour list indice
         # species: indice for element of each atom
         """
-        tmp_index=torch.arange(numatoms.shape[0],device=cart.device)*cart.shape[1]
-        self_mol_index=tmp_index.view(-1,1).expand(-1,atom_index.shape[2]).reshape(1,-1)
         cart_=cart.flatten(0,1)
         totnatom=cart_.shape[0]
+        # consider the effect of the external field
+        ef_orbital = oe.contract("ji,k ->ijk",self.angular(ef,torch.ones(ef.shape[0],dtype=ef.dtype,device=ef.device)),\
+        self.ef_para,backend="torch").view(ef.shape[0],1,-1,self.rs.shape[1]).expand(-1,cart.shape[1],-1,-1).\
+        reshape(totnatom,-1,self.rs.shape[1])
+        #============================================================================
+        tmp_index=torch.arange(numatoms.shape[0],device=cart.device)*cart.shape[1]
+        self_mol_index=tmp_index.view(-1,1).expand(-1,atom_index.shape[2]).reshape(1,-1)
         padding_mask=torch.nonzero((shifts.view(-1,3)>-1e10).all(1)).view(-1)
         # get the index for the distance less than cutoff (the dimension is reduntant)
         atom_index12=(atom_index.view(2,-1)+self_mol_index)[:,padding_mask]
@@ -95,17 +101,16 @@ class GetDensity(torch.nn.Module):
         orb_coeff=torch.empty((totnatom,self.rs.shape[1]),dtype=cart.dtype,device=cart.device)
         mask=(species>-0.5).view(-1)
         orb_coeff.masked_scatter_(mask.view(-1,1),self.params.index_select(0,species[torch.nonzero(mask).view(-1)]))
-        density=self.obtain_orb_coeff(0,totnatom,orbital,atom_index12,orb_coeff).view(totnatom,-1)
+        density=self.obtain_orb_coeff(0,totnatom,orbital,ef_orbital,atom_index12,orb_coeff).view(totnatom,-1)
         for ioc_loop, (_, m) in enumerate(self.ocmod.items()):
             orb_coeff = orb_coeff + m(density,species)
-            density = self.obtain_orb_coeff(ioc_loop+1,totnatom,orbital,atom_index12,orb_coeff)
+            density = self.obtain_orb_coeff(ioc_loop+1,totnatom,orbital,ef_orbital,atom_index12,orb_coeff)
         return density
  
-    def obtain_orb_coeff(self,iteration:int,totnatom:int,orbital,atom_index12,orb_coeff):
+    def obtain_orb_coeff(self,iteration:int,totnatom:int,orbital,ef_orbital,atom_index12,orb_coeff):
         expandpara=orb_coeff.index_select(0,atom_index12[1])
         worbital=oe.contract("ijk,ik->ijk", orbital,expandpara,backend="torch")
-        sum_worbital=torch.zeros((totnatom,orbital.shape[1],self.rs.shape[1]),dtype=orbital.dtype,device=orbital.device)
-        sum_worbital=torch.index_add(sum_worbital,0,atom_index12[0],worbital)
+        ef_orbital=torch.index_add(ef_orbital,0,atom_index12[0],worbital)
         expandpara=self.hyper[iteration].index_select(0,self.index_para)
-        hyper_worbital=oe.contract("ijk,jkm -> ijm",sum_worbital,expandpara,backend="torch")
+        hyper_worbital=oe.contract("ijk,jkm -> ijm",ef_orbital,expandpara,backend="torch")
         return torch.sum(torch.square(hyper_worbital),dim=1)

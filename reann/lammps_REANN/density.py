@@ -3,7 +3,6 @@ from torch import nn
 from torch import Tensor
 from collections import OrderedDict
 import numpy as np
-import opt_einsum as oe
 
 
 class GetDensity(torch.nn.Module):
@@ -26,9 +25,13 @@ class GetDensity(torch.nn.Module):
             index_para=torch.cat((index_para,torch.ones((npara[i]),dtype=torch.long)*i))
 
         self.register_buffer('index_para',index_para)
+        # index_para: Type: longTensor,index_para was used to expand the dim of params 
+        # in nn with para(l) 
+        # will have the form index_para[0,|1,1,1|,2,2,2,2,2,2,2,2,2|...npara[l]..\...]
         self.params=nn.parameter.Parameter(torch.ones_like(self.rs))
         self.hyper=nn.parameter.Parameter(torch.nn.init.orthogonal_(torch.ones(self.rs.shape[1],norbit)).\
         unsqueeze(0).unsqueeze(0).repeat(len(ocmod_list)+1,nipsin,1,1))
+        self.ef_para=nn.parameter.Parameter(torch.ones(self.rs.shape[1]))
         ocmod=OrderedDict()
         for i, m in enumerate(ocmod_list):
             f_oc="memssage_"+str(i)
@@ -70,7 +73,7 @@ class GetDensity(torch.nn.Module):
             num+=orbital.shape[0]
         return angular    
     
-    def forward(self,cart,atom_index,local_species,neigh_list):
+    def forward(self,cart,ef,atom_index,local_species,neigh_list):
         """
         # input cart: coordinates (nall,3)
         # input atom_index12(2*maxneigh): store the index of neighbour atoms for each central atom
@@ -79,6 +82,8 @@ class GetDensity(torch.nn.Module):
         # angular: orbital form
         """
         nlocal=local_species.shape[0]
+        ef_orbital = torch.einsum("ji,k->ijk",self.angular(ef.view(1,-1),torch.ones(1,dtype=ef.dtype,device=ef.device)),\
+        self.ef_para).expand(nlocal,-1,-1)
         neigh_species=local_species.index_select(0,neigh_list)
         selected_cart = cart.index_select(0, atom_index.view(-1)).view(2, -1, 3)
         dist_vec = selected_cart[0] - selected_cart[1]
@@ -87,17 +92,16 @@ class GetDensity(torch.nn.Module):
         orbital = torch.einsum("ji,ik -> ijk",self.angular(dist_vec,self.cutoff_cosine(distances)),\
         self.gaussian(distances,neigh_species))
         orb_coeff=self.params.index_select(0,local_species)
-        density=self.obtain_orb_coeff(0,nlocal,orbital,atom_index[0],neigh_list,orb_coeff)
+        density=self.obtain_orb_coeff(0,nlocal,orbital,ef_orbital,atom_index[0],neigh_list,orb_coeff)
         for ioc_loop, (_, m) in enumerate(self.ocmod.items()):
             orb_coeff += m(density,local_species)
-            density = self.obtain_orb_coeff(ioc_loop+1,nlocal,orbital,atom_index[0],neigh_list,orb_coeff)
+            density = self.obtain_orb_coeff(ioc_loop+1,nlocal,orbital,ef_orbital,atom_index[0],neigh_list,orb_coeff)
         return density.view(nlocal,-1)
    
-    def obtain_orb_coeff(self,iteration:int,numatom:int,orbital,center_list,neigh_list,orb_coeff):
+    def obtain_orb_coeff(self,iteration:int,numatom:int,orbital,ef_orbital,center_list,neigh_list,orb_coeff):
         expandpara=orb_coeff.index_select(0,neigh_list)
         worbital=torch.einsum("ijk,ik ->ijk", orbital,expandpara)
-        sum_worbital=torch.zeros((numatom,orbital.shape[1],self.rs.shape[1]),dtype=orb_coeff.dtype,device=orb_coeff.device)
-        sum_worbital=torch.index_add(sum_worbital,0,center_list,worbital)
+        ef_orbital=torch.index_add(ef_orbital,0,center_list,worbital)
         expandpara=self.hyper[iteration].index_select(0,self.index_para)
-        hyper_worbital=torch.einsum("ijk,jkm -> ijm",sum_worbital,expandpara)
+        hyper_worbital=torch.einsum("ijk,jkm -> ijm",ef_orbital,expandpara)
         return torch.sum(torch.square(hyper_worbital),dim=1)

@@ -21,7 +21,7 @@ class GetDensity(torch.nn.Module):
         npara=[1]
         index_para=torch.tensor([0],dtype=torch.long)
         for i in range(1,nipsin):
-            npara.append(int(3**i))
+            npara.append(np.power(3,i))
             index_para=torch.cat((index_para,torch.ones((npara[i]),dtype=torch.long)*i))
 
         self.register_buffer('index_para',index_para)
@@ -31,6 +31,7 @@ class GetDensity(torch.nn.Module):
         self.params=nn.parameter.Parameter(torch.ones_like(self.rs))
         self.hyper=nn.parameter.Parameter(torch.nn.init.orthogonal_(torch.ones(self.rs.shape[1],norbit)).\
         unsqueeze(0).unsqueeze(0).repeat(len(ocmod_list)+1,nipsin,1,1))
+        self.ef_para=nn.parameter.Parameter(torch.ones(self.rs.shape[1]))
         ocmod=OrderedDict()
         for i, m in enumerate(ocmod_list):
             f_oc="memssage_"+str(i)
@@ -72,7 +73,7 @@ class GetDensity(torch.nn.Module):
             num+=orbital.shape[0]
         return angular    
     
-    def forward(self,cart,neigh_list,shifts,species):
+    def forward(self,cart,ef,neigh_list,shifts,species):
         """
         # input cart: coordinates (nbatch*numatom,3)
         # input shifts: coordinates shift values (unit cell)
@@ -80,26 +81,29 @@ class GetDensity(torch.nn.Module):
         # atom_index: neighbour list indice
         # species: indice for element of each atom
         """ 
-        numatom=cart.shape[0]
+        cart_=cart.flatten(0,1)
+        totnatom=cart_.shape[0]
+        ef_orbital = torch.einsum("ji,k ->ijk",self.angular(ef,torch.ones(ef.shape[0],dtype=ef.dtype,device=ef.device)),\
+        self.ef_para).view(ef.shape[0],1,-1,self.rs.shape[1]).expand(-1,cart.shape[1],-1,-1).\
+        reshape(totnatom,-1,self.rs.shape[1])
         neigh_species=species.index_select(0,neigh_list[1])
-        selected_cart = cart.index_select(0, neigh_list.view(-1)).view(2, -1, 3)
+        selected_cart = cart_.index_select(0, neigh_list.view(-1)).view(2, -1, 3)
         dist_vec = selected_cart[0] - selected_cart[1]-shifts
         distances = torch.linalg.norm(dist_vec,dim=-1)
         #dist_vec=dist_vec/distances.view(-1,1)
         orbital = torch.einsum("ji,ik -> ijk",self.angular(dist_vec,self.cutoff_cosine(distances)),self.gaussian(distances,neigh_species))
         orb_coeff=self.params.index_select(0,species)
-        density=self.obtain_orb_coeff(0,numatom,orbital,neigh_list,orb_coeff)
+        density=self.obtain_orb_coeff(0,totnatom,orbital,ef_orbital,neigh_list,orb_coeff)
         for ioc_loop, (_, m) in enumerate(self.ocmod.items()):
             orb_coeff += m(density,species)
-            density = self.obtain_orb_coeff(ioc_loop+1,numatom,orbital,neigh_list,orb_coeff)
+            density = self.obtain_orb_coeff(ioc_loop+1,totnatom,orbital,ef_orbital,neigh_list,orb_coeff)
         return density
 
-    def obtain_orb_coeff(self,iteration:int,numatom:int,orbital,neigh_list,orb_coeff):
+    def obtain_orb_coeff(self,iteration:int,totnatom:int,orbital,ef_orbital,neigh_list,orb_coeff):
         expandpara=orb_coeff.index_select(0,neigh_list[1])
         worbital=torch.einsum("ijk,ik ->ijk", orbital,expandpara)
-        sum_worbital=torch.zeros((numatom,orbital.shape[1],self.rs.shape[1]),dtype=orb_coeff.dtype,device=orb_coeff.device)
-        sum_worbital=torch.index_add(sum_worbital,0,neigh_list[0],worbital)
+        ef_orbital=torch.index_add(ef_orbital,0,neigh_list[0],worbital)
         expandpara=self.hyper[iteration].index_select(0,self.index_para)
-        hyper_worbital=torch.einsum("ijk,jkm ->ijm",sum_worbital,expandpara)
+        hyper_worbital=torch.einsum("ijk,jkm ->ijm",ef_orbital,expandpara)
         return torch.sum(torch.square(hyper_worbital),dim=1)
 

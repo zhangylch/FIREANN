@@ -47,7 +47,7 @@ def neighbor_pairs(pbc, coordinates, species, cell, cutoff:float, neigh_atoms:in
     norm(2, -1)
     padding_mask = padding_mask[:, p12_all.view(-1)].view(num_mols, 2, -1).any(1)
     distances.masked_fill_(padding_mask, math.inf)  # dim=num_mols*(nshift*natom*natom)
-    atom_index=torch.zeros((2,num_mols,num_atoms*neigh_atoms),device=cell.device,dtype=torch.long)
+    atom_index=torch.zeros((2,num_mols,num_atoms*neigh_atoms),device=cell.device,dtype=torch.int32)
     shifts=-1e11*torch.ones((num_mols,num_atoms*neigh_atoms,3),device=cell.device)
     maxneigh=0 
     for inum_mols in range(num_mols):

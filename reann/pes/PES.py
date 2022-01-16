@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import os
 from inference.density import *
-from inference.get_neigh import *
 from src.MODEL import *
 
 class PES(torch.nn.Module):
@@ -11,7 +10,7 @@ class PES(torch.nn.Module):
         #========================set the global variable for using the exec=================
         global nblock, nl, dropout_p, table_norm, activate,norbit
         global oc_loop,oc_nblock, oc_nl, oc_dropout_p, oc_table_norm, oc_activate
-        global nwave, neigh_atoms, cutoff, nipsin, atomtype
+        global nwave, cutoff, nipsin, atomtype
         # global parameters for input_nn
         nblock = 1                    # nblock>=2  resduial NN block will be employed nblock=1: simple feedforward nn
         nl=[128,128]                # NN structure
@@ -66,6 +65,7 @@ class PES(torch.nn.Module):
         else:
             from src.activate import Relu_like as oc_actfun        
 
+        self.atomtype=atomtype
         dropout_p=np.array(dropout_p)
         oc_dropout_p=np.array(oc_dropout_p)
         maxnumtype=len(atomtype)
@@ -92,16 +92,8 @@ class PES(torch.nn.Module):
             oc_dropout_p,oc_actfun,table_norm=oc_table_norm))
         self.density=GetDensity(rs,inta,cutoff,nipsin,norbit,ocmod_list)
         self.nnmod=NNMod(maxnumtype,outputneuron,atomtype,nblock,list(nl),dropout_p,actfun,table_norm=table_norm)
-        #================================================nn module==================================================
-        self.neigh_list=Neigh_List(cutoff,nlinked)
      
-    def forward(self,period_table,cart,cell,species,mass):
-        cart=cart.detach().clone()
-        neigh_list, shifts=self.neigh_list(period_table,cart,cell,mass)
-        cart.requires_grad_(True)
-        density=self.density(cart,neigh_list,shifts,species)
-        output = self.nnmod(density,species)+self.nnmod.initpot
-        varene = torch.sum(output)
-        grad = torch.autograd.grad([varene,],[cart,])[0]
-        if grad is not None:
-            return varene.detach(),-grad.detach()
+    def forward(self,cart,ef,neigh_list,shifts,species):
+        density=self.density(cart,ef,neigh_list,shifts,species)
+        atomic_energy = self.nnmod(density,species)+self.nnmod.initpot
+        return atomic_energy

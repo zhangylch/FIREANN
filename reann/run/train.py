@@ -1,11 +1,17 @@
 #! /usr/bin/env python3
-import time
 from src.read import *
 from src.dataloader import *
 from src.optimize import *
 from src.density import *
 from src.MODEL import *
-from src.EMA import *
+from src.get_loss import *
+from src.scheduler import *
+from src.restart import *
+from src.weight_scheduler import *
+from src.checkpoint import *
+from src.save_pes import *
+from torch.optim.swa_utils import AveragedModel
+
 if activate=='Tanh_like':
     from src.activate import Tanh_like as actfun
 else:
@@ -16,38 +22,52 @@ if oc_activate=='Tanh_like':
 else:
     from src.activate import Relu_like as oc_actfun
 
-if start_table==0:
-    from src.Property_energy import *
-elif start_table==1:
-    from src.Property_force import *
-elif start_table==2:
-    from src.Property_DM import *
-elif start_table==3:
-    from src.Property_TDM import *
-elif start_table==4:
-    from src.Property_POL import *
+#choose the right class used for the calculation of property
+if  "Energy" in Prop_list and "Force" not in Prop_list and "Dipole" not in Prop_list:
+    from src.Property_E import *
+elif "Force" in Prop_list and "Dipole" in Prop_list: 
+    from src.Property_E_F_DM import *
+elif "Force" in Prop_list and "Dipole" not in Prop_list: 
+    from src.Property_E_F import *
+elif "Force" not in Prop_list and "Dipole" in Prop_list: 
+    from src.Property_E_DM import *
+    
+if "POL" in Prop_list and len(Prop_list)==1:
+    from src.Property_Pol import *
+    Property_Pol=None
+elif "POL" in Prop_list: 
+    import src.Property_Pol as Property_Pol
+else:
+    Property_Pol=None
+
 from src.cpu_gpu import *
-from src.Loss import *
-PES_Lammps=None
-if start_table<=1:
-    import pes.script_PES as PES_Normal
-    if oc_loop==0:
-        import lammps.script_PES as PES_Lammps
-    else:
-        import lammps_REANN.script_PES as PES_Lammps
-elif start_table==2:
-    import dm.script_PES as PES_Normal
-elif start_table==3:
-    import tdm.script_PES as PES_Normal
-elif start_table==4:
-    import pol.script_PES as PES_Normal
+
+<<<<<<< HEAD
+import pes.script_PES as PES_Normal
+if oc_loop==0:
+    import lammps.script_PES as PES_Lammps
+else:
+    import lammps_REANN.script_PES as PES_Lammps
+=======
+from src.script_PES import *
+import pes.PES as PES
+if oc_loop==0:
+    import lammps.PES as Lammps_PES
+else:
+    import lammps_REANN.PES as Lammps_PES
+>>>>>>> my-backup
+from src.print_info import *
 
 #==============================train data loader===================================
-dataloader_train=DataLoader(com_coor_train,abpropset_train,numatoms_train,\
-species_train,atom_index_train,shifts_train,batchsize,shuffle=True)
+dataloader_train=DataLoader(com_coor_train,ef_train,abprop_train,numatoms_train,\
+<<<<<<< HEAD
+species_train,atom_index_train,shifts_train,batchsize_train,shuffle=True)
+=======
+species_train,atom_index_train,shifts_train,batchsize_train,min_data_len=min_data_len,shuffle=True)
+>>>>>>> my-backup
 #=================================test data loader=================================
-dataloader_test=DataLoader(com_coor_test,abpropset_test,numatoms_test,\
-species_test,atom_index_test,shifts_test,batchsize,shuffle=False)
+dataloader_test=DataLoader(com_coor_test,ef_test,abprop_test,numatoms_test,\
+species_test,atom_index_test,shifts_test,batchsize_test,shuffle=False)
 # dataloader used for load the mini-batch data
 if torch.cuda.is_available(): 
     data_train=CudaDataLoader(dataloader_train,device,queue_size=queue_size)
@@ -55,6 +75,7 @@ if torch.cuda.is_available():
 else:
     data_train=dataloader_train
     data_test=dataloader_test
+
 #==============================oc nn module=================================
 # outputneuron=nwave for each orbital have a different coefficients
 ocmod_list=[]
@@ -65,15 +86,22 @@ for ioc_loop in range(oc_loop):
 getdensity=GetDensity(rs,inta,cutoff,neigh_atoms,nipsin,norbit,ocmod_list)
 #==============================nn module=================================
 nnmod=NNMod(maxnumtype,outputneuron,atomtype,nblock,list(nl),dropout_p,actfun,initpot=initpot,table_norm=table_norm)
-nnmodlist=[nnmod]
-if start_table == 4:
-    nnmod1=NNMod(maxnumtype,outputneuron,atomtype,nblock,list(nl),dropout_p,actfun,table_norm=table_norm)
-    nnmod2=NNMod(maxnumtype,outputneuron,atomtype,nblock,list(nl),dropout_p,actfun,table_norm=table_norm)
-    nnmodlist.append(nnmod1)
-    nnmodlist.append(nnmod2)
 #=========================create the module=========================================
-Prop_class=Property(getdensity,nnmodlist).to(device)  # to device must be included
+print_info=Print_Info(fout,end_lr,train_nele,test_nele,Prop_list)
+Prop_class=Property(getdensity,nnmod).to(device)  # to device must be included
+if Property_Pol is not None:
+    Prop_Pol=Property_Pol.Property(getdensity,nnmod).to(device)
+else:
+    Prop_Pol=None
 
+
+<<<<<<< HEAD
+=======
+
+# define the SWA model only on rank 0 and before DDP
+swa_model = AveragedModel(Prop_class)
+
+>>>>>>> my-backup
 ##  used for syncbn to synchronizate the mean and variabce of bn 
 #Prop_class=torch.nn.SyncBatchNorm.convert_sync_batchnorm(Prop_class).to(device)
 if world_size>1:
@@ -82,19 +110,27 @@ if world_size>1:
     else:
         Prop_class = DDP(Prop_class, find_unused_parameters=find_unused)
 
-#define the loss function
-loss_fn=Loss()
+<<<<<<< HEAD
+
+=======
+>>>>>>> my-backup
+#initial the class used for evaluating the loss
+get_loss=Get_Loss(index_prop,Prop_class,Prop_Pol)
 
 #define optimizer
 optim=torch.optim.AdamW(Prop_class.parameters(), lr=start_lr, weight_decay=re_ceff)
 
 # learning rate scheduler 
+<<<<<<< HEAD
 scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optim,factor=decay_factor,patience=patience_epoch,min_lr=end_lr)
+
+# the scheduler 
+save_scheduler=Save_Scheduler(init_weight,final_weight,start_lr,end_lr,scheduler,optim,Prop_class,PES_Normal,PES_Lammps)
 
 # load the model from EANN.pth
 if table_init==1:
     if torch.cuda.is_available():
-        device1=device
+        device1="cuda"
     else:
         device1="cpu"
     checkpoint = torch.load("EANN.pth",map_location=torch.device(device1))
@@ -102,22 +138,45 @@ if table_init==1:
     optim.load_state_dict(checkpoint['optimizer'])
     if optim.param_groups[0]["lr"]>start_lr: optim.param_groups[0]["lr"]=start_lr  #for restart with a learning rate 
     if optim.param_groups[0]["lr"]<end_lr: optim.param_groups[0]["lr"]=start_lr  #for restart with a learning rate 
-    lr=optim.param_groups[0]["lr"]
-    f_ceff=init_f+(final_f-init_f)*(lr-start_lr)/(end_lr-start_lr+1e-8)
-    prop_ceff[1]=f_ceff
-
+    lr,intime_weight=save_scheduler(1e5)
 
 ema = EMA(Prop_class, 0.999)
+#for name, m in Prop_class.named_parameters():
+#    print(name)
 #==========================================================
-if dist.get_rank()==0:
-    fout.write(time.strftime("%Y-%m-%d-%H_%M_%S \n", time.localtime()))
-    fout.flush()
-    for name, m in Prop_class.named_parameters():
-        print(name)
+Optimize(Epoch,print_epoch,intime_weight,save_scheduler,print_info,data_train,data_test,get_loss,optim,ema)
+=======
+lr_scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optim,factor=decay_factor,patience=patience_epoch,min_lr=end_lr)
+
+# define the class tho save the model for evalutaion
+jit_pes=script_pes(PES.PES(),"PES")
+jit_lammps=script_pes(Lammps_PES.PES(),"LAMMPS")
+
+# save the checkpoint
+checkpoint=Checkpoint(optim)
+save_pes=Save_Pes(jit_pes,jit_lammps)
+
+# define the restart class
+restart=Restart(optim)
+
+# the scheduler 
+scheduler=Scheduler(lr_average,decay_factor,checkpoint,lr_scheduler,restart,optim,Prop_class,swa_model,save_pes)
+
+#scheduler the weight of various properties
+weight_scheduler=Weight_Scheduler(init_weight,final_weight,start_lr,end_lr)
+
+# load the model from EANN.pth
+if table_init==1: 
+    restart(Prop_class,"REANN.pth")
+    restart(swa_model,"SWA_REANN.pth")
+    nnmod.initpot[0]=initpot
+    if rank==0: swa_model.module.nnmod.initpot[0]=initpot
+    if optim.param_groups[0]["lr"]>start_lr: optim.param_groups[0]["lr"]=start_lr  #for restart with a learning rate 
+    if optim.param_groups[0]["lr"]<end_lr: optim.param_groups[0]["lr"]=start_lr  #for restart with a learning rate
+else:
+    if rank==0: checkpoint(swa_model,"SWA_REANN.pth")
+#for name, m in Prop_class.named_parameters():
+#    print(name)
 #==========================================================
-Optimize(fout,prop_ceff,nprop,train_nele,test_nele,init_f,final_f,start_lr,end_lr,print_epoch,Epoch,\
-data_train,data_test,Prop_class,loss_fn,optim,scheduler,ema,PES_Normal,device,PES_Lammps=PES_Lammps)
-if dist.get_rank()==0:
-    fout.write(time.strftime("%Y-%m-%d-%H_%M_%S \n", time.localtime()))
-    fout.write("terminated normal\n")
-    fout.close()
+Optimize(Epoch,print_epoch,weight_scheduler,scheduler,print_info,data_train,data_test,get_loss,optim)
+>>>>>>> my-backup

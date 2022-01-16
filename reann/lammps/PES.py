@@ -65,6 +65,7 @@ class PES(torch.nn.Module):
         else:
             from src.activate import Relu_like as oc_actfun
 
+        self.atomtype=atomtype
         dropout_p=np.array(dropout_p)
         oc_dropout_p=np.array(oc_dropout_p)
         maxnumtype=len(atomtype)
@@ -93,10 +94,10 @@ class PES(torch.nn.Module):
         self.nnmod=NNMod(maxnumtype,outputneuron,atomtype,nblock,list(nl),dropout_p,actfun,table_norm=table_norm)
         #================================================nn module==================================================
      
-    def forward(self,cart,atom_index,local_species,neigh_species):
+    def forward(self,cart,ef,atom_index,local_species,neigh_species):
         atom_index = atom_index.t().contiguous()
         cart.requires_grad_(True)
-        density=self.density(cart,atom_index,local_species,neigh_species)
+        density=self.density(cart,ef,atom_index,local_species,neigh_species)
         output = self.nnmod(density,local_species)+self.nnmod.initpot
         varene = torch.sum(output)
         grad = torch.autograd.grad([varene,],[cart,])[0]

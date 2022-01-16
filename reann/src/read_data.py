@@ -1,8 +1,14 @@
 import numpy as np
 import math
+import re
 
 # read system configuration and energy/force
-def Read_data(floderlist,nprob,start_table=None):
+def Read_data(floderlist,Prop_list,start_table=None):
+    # to generate the regular expression for various properties
+    pattern=[]
+    for prop in Prop_list:
+        if prop!="Force":
+            pattern.append(re.compile(r"(?<={}=)\'(.+?)\'".format(prop)))
     coor=[]
     scalmatrix=[]
     abprop=[] 
@@ -11,12 +17,14 @@ def Read_data(floderlist,nprob,start_table=None):
     mass=[]
     numatoms=[]
     period_table=[]
+    ef=[]
     # tmp variable
     #===================variable for force====================
     if start_table==1:
        force=[]
     numpoint=[0 for _ in range(len(floderlist))]
-    num=0
+    num=0 
+    abprop=[[] for m in Prop_list if m !="Force"]
     for ifloder,floder in enumerate(floderlist):
         fname2=floder+'configuration'
         with open(fname2,'r') as f1:
@@ -39,12 +47,17 @@ def Read_data(floderlist,nprob,start_table=None):
                 coor.append([])
                 mass.append([])
                 atom.append([])
+                string=f1.readline()
+                for i,ipattern in enumerate(pattern):
+                    tmp=re.findall(ipattern,string)
+                    abprop[i].append(list(map(float,tmp[0].split())))
+
                 if start_table==1: force.append([])
                 while True:
                     string=f1.readline()
                     m=string.split()
-                    if m[0]=="abprop:":
-                        abprop.append(list(map(float,m[1:1+nprob])))
+                    if m[0]=="External_field:":
+                        ef.append(list(map(float,m[1:])))
                         break
                     if not start_table:
                         atom[num].append(m[0]) 
@@ -60,4 +73,4 @@ def Read_data(floderlist,nprob,start_table=None):
                 numpoint[ifloder]+=1
                 numatoms.append(len(atom[num]))
                 num+=1
-    return numpoint,atom,mass,numatoms,scalmatrix,period_table,coor,abprop,force
+    return numpoint,atom,mass,numatoms,scalmatrix,period_table,coor,ef,abprop,force

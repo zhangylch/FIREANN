@@ -32,7 +32,7 @@ class CudaDataLoader:
         if torch.is_tensor(sample):
             return sample.to(self.device, non_blocking=True)
         else:
-            return [self.load_instance(s) for s in sample]
+            return (self.load_instance(s) for s in sample)
 
     def __iter__(self):
         self.idx = 0
