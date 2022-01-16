@@ -42,29 +42,17 @@ else:
 
 from src.cpu_gpu import *
 
-<<<<<<< HEAD
-import pes.script_PES as PES_Normal
-if oc_loop==0:
-    import lammps.script_PES as PES_Lammps
-else:
-    import lammps_REANN.script_PES as PES_Lammps
-=======
 from src.script_PES import *
 import pes.PES as PES
 if oc_loop==0:
     import lammps.PES as Lammps_PES
 else:
     import lammps_REANN.PES as Lammps_PES
->>>>>>> my-backup
 from src.print_info import *
 
 #==============================train data loader===================================
 dataloader_train=DataLoader(com_coor_train,ef_train,abprop_train,numatoms_train,\
-<<<<<<< HEAD
-species_train,atom_index_train,shifts_train,batchsize_train,shuffle=True)
-=======
 species_train,atom_index_train,shifts_train,batchsize_train,min_data_len=min_data_len,shuffle=True)
->>>>>>> my-backup
 #=================================test data loader=================================
 dataloader_test=DataLoader(com_coor_test,ef_test,abprop_test,numatoms_test,\
 species_test,atom_index_test,shifts_test,batchsize_test,shuffle=False)
@@ -95,13 +83,9 @@ else:
     Prop_Pol=None
 
 
-<<<<<<< HEAD
-=======
-
 # define the SWA model only on rank 0 and before DDP
 swa_model = AveragedModel(Prop_class)
 
->>>>>>> my-backup
 ##  used for syncbn to synchronizate the mean and variabce of bn 
 #Prop_class=torch.nn.SyncBatchNorm.convert_sync_batchnorm(Prop_class).to(device)
 if world_size>1:
@@ -110,10 +94,6 @@ if world_size>1:
     else:
         Prop_class = DDP(Prop_class, find_unused_parameters=find_unused)
 
-<<<<<<< HEAD
-
-=======
->>>>>>> my-backup
 #initial the class used for evaluating the loss
 get_loss=Get_Loss(index_prop,Prop_class,Prop_Pol)
 
@@ -121,31 +101,6 @@ get_loss=Get_Loss(index_prop,Prop_class,Prop_Pol)
 optim=torch.optim.AdamW(Prop_class.parameters(), lr=start_lr, weight_decay=re_ceff)
 
 # learning rate scheduler 
-<<<<<<< HEAD
-scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optim,factor=decay_factor,patience=patience_epoch,min_lr=end_lr)
-
-# the scheduler 
-save_scheduler=Save_Scheduler(init_weight,final_weight,start_lr,end_lr,scheduler,optim,Prop_class,PES_Normal,PES_Lammps)
-
-# load the model from EANN.pth
-if table_init==1:
-    if torch.cuda.is_available():
-        device1="cuda"
-    else:
-        device1="cpu"
-    checkpoint = torch.load("EANN.pth",map_location=torch.device(device1))
-    Prop_class.load_state_dict(checkpoint['eannparam'])
-    optim.load_state_dict(checkpoint['optimizer'])
-    if optim.param_groups[0]["lr"]>start_lr: optim.param_groups[0]["lr"]=start_lr  #for restart with a learning rate 
-    if optim.param_groups[0]["lr"]<end_lr: optim.param_groups[0]["lr"]=start_lr  #for restart with a learning rate 
-    lr,intime_weight=save_scheduler(1e5)
-
-ema = EMA(Prop_class, 0.999)
-#for name, m in Prop_class.named_parameters():
-#    print(name)
-#==========================================================
-Optimize(Epoch,print_epoch,intime_weight,save_scheduler,print_info,data_train,data_test,get_loss,optim,ema)
-=======
 lr_scheduler=torch.optim.lr_scheduler.ReduceLROnPlateau(optim,factor=decay_factor,patience=patience_epoch,min_lr=end_lr)
 
 # define the class tho save the model for evalutaion
@@ -179,4 +134,3 @@ else:
 #    print(name)
 #==========================================================
 Optimize(Epoch,print_epoch,weight_scheduler,scheduler,print_info,data_train,data_test,get_loss,optim)
->>>>>>> my-backup

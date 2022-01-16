@@ -10,11 +10,7 @@ class Neigh_List(torch.nn.Module):
         r1 = torch.arange(-nlinked, nlinked + 1)
         self.linked=torch.cartesian_prod(r1, r1, r1).view(1,-1,3)
 
-<<<<<<< HEAD
-    def forward(self,period_table,coordinates,cell,mass):
-=======
     def forward(self,period_table,coordinates,cell):
->>>>>>> my-backup
         """Compute pairs of atoms that are neighbors
     
         Arguments:
@@ -32,12 +28,6 @@ class Neigh_List(torch.nn.Module):
         deviation_coor=torch.round(inv_coor-inv_coor[0])
         inv_coor=inv_coor-deviation_coor
         coordinates[:,:]=torch.einsum("ij,jk -> ik",inv_coor,cell)
-<<<<<<< HEAD
-        totmass=torch.sum(mass)
-        com=torch.einsum('i,ij->j',mass,coordinates)/totmass
-        coordinates[:,:]=coordinates-com[None,:]
-=======
->>>>>>> my-backup
         num_repeats = torch.ceil(torch.min(self.cutoff/torch.abs(cell),dim=0)[0]).to(torch.int)
         # the number of periodic image in each direction
         num_repeats = period_table*num_repeats

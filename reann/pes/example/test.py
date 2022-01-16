@@ -1,13 +1,6 @@
 import numpy as np
 import torch
 from gpu_sel import *
-<<<<<<< HEAD
-from get_neigh import *
-import re
-
-#====================================Prop_list================================================
-Prop_list=["Energy","Dipole"]
-=======
 from calculate import *
 from write_format import *
 import re
@@ -25,7 +18,6 @@ convertor=np.array([factor_energy,factor_dipole,factor_pol])
 t_convertor=1.0/convertor
 #====================================Prop_list================================================
 Prop_list=["Energy","Dipole","POL"]
->>>>>>> my-backup
 pattern=[]
 for prop in Prop_list:
     if prop!="Force":
@@ -35,69 +27,6 @@ for prop in Prop_list:
 gpu_sel()
 # gpu/cpu
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-<<<<<<< HEAD
-# same as the atomtype in the file input_density
-atomtype=["O","H"]
-#load the serilizable model
-pes=torch.jit.load("EANN_PES_DOUBLE.pt")
-# FLOAT: torch.float32; DOUBLE:torch.double for using float/double in inference
-pes.to(device).to(torch.double)
-# set the eval mode
-pes.eval()
-#pes=torch.jit.optimize_for_inference(pes)
-# instantiate the neigh list 
-get_neighlist=Neigh_List(pes.cutoff,1)  # cell linked list algorithm for pbc (linear scaling)
-# save the lattic parameters
-cell=np.zeros((3,3),dtype=np.float64)
-period_table=torch.tensor([1,1,1],dtype=torch.double,device=device)   # same as the pbc in the periodic boundary condition
-f2=open('dipole.dat','w')
-with open("/group/zyl/program/external-reann/data/H2O-ef-static/test/configuration",'r') as f1:
-    while True:
-        string=f1.readline()
-        if not string: break
-        string=f1.readline()
-        cell[0]=np.array(list(map(float,string.split())))
-        string=f1.readline()
-        cell[1]=np.array(list(map(float,string.split())))
-        string=f1.readline()
-        cell[2]=np.array(list(map(float,string.split())))
-        string=f1.readline()
-        string=f1.readline()
-        abprop=[]
-        for i,ipattern in enumerate(pattern):
-            tmp=re.findall(ipattern,string)
-            abprop.append(np.array(list(map(float,tmp[0].split()))))
-        species=[]
-        cart=[]
-        abforce=[]
-        mass=[]
-        while True:
-            string=f1.readline()
-            if "External_field:" in string: 
-                ef=torch.tensor(list(map(float,string.split()[1:4])))
-                break
-            tmp=string.split()
-            tmp1=list(map(float,tmp[2:8]))
-            cart.append(tmp1[0:3])
-            abforce.append(tmp1[3:6])
-            mass.append(float(tmp[1]))
-            species.append(atomtype.index(tmp[0]))
-        species=torch.from_numpy(np.array(species)).to(device)  # from numpy array to torch tensor
-        cart=torch.from_numpy(np.array(cart)).to(device).to(torch.double)  # also float32/double
-        mass=torch.from_numpy(np.array(mass)).to(device).to(torch.double)  # also float32/double
-        tcell=torch.from_numpy(cell).to(device).to(torch.double)  # also float32/double
-        cart=cart.detach().clone()
-        neigh_list, shifts=get_neighlist(period_table,cart,tcell,mass)
-        #cart.requires_grad_(True)
-        ef.requires_grad_(True)
-        atomic_energy=pes(cart,ef,neigh_list,shifts,species)
-        varene=torch.sum(atomic_energy)
-        dipole=-torch.autograd.grad(varene,ef)[0].numpy()
-        print(dipole)
-        for i in range(3):
-            f2.write("{}  {} \n".format(dipole[i],abprop[1][i]))
-f2.close()       
-=======
 # dtype
 torch_dtype=torch.double
 calculator=Calculator(device,torch_dtype)
@@ -184,4 +113,3 @@ with open("/group/zyl/data/NMA/b3lyp-ef/configuration",'r') as f1:
             print(abprop[init_num+i][0],varene[i])
             print(abprop[init_num+i][1],dipole[i])
             print(abprop[init_num+i][2],pol[i])
->>>>>>> my-backup
