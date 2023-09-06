@@ -37,6 +37,6 @@
      oc_activate = 'Relu_like'
 #========================queue_size sequence for laod data into gpu
      oc_table_norm=True
-     oc_loop=0
+     oc_loop=3
 #========================floder used to save the data========================
   folder="../../data/liquid_water/"

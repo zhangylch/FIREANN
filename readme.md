@@ -15,17 +15,34 @@ The training process can be divided into four parts: information loading, initia
 Users can employ geometries, external fields energies, atomic force vectors (or some other physical properties which are invariant under rigid translation, rotation, and permutation of identical atoms and their corresponding gradients) and arbitrary response of potential energy wrt external fields (dipole moments, polarizabilities, etc.) to construct a model. There are three routines to use this package:
 1. [Prepare the environment](#Prepare-the-environment)
 2. [Prepare data](#Prepare-data)
-3. [Construct a model](#Construct-a-model)
+3. [Set up parameters](#Set-up-parameters)
 
 ### Prepare the environment
 The FIREANN Package is built based on PyTorch and uses the "opt_einsum" package for optimizing einsum-like expressions frequently used in the calculation of the embedded density. In order to run the REANN package, users need to install PyTorch (version: 2.0.0) based on the instructions on the [PyTorch](https://pytorch.org/get-started/locally/) official site and the package named [opt_einsum](https://optimized-einsum.readthedocs.io/en/stable/).
 
 ### Prepare data
 There are two directories that users need to prepare, namely, “train” and “val”, each of which includes a file “configuration” used to preserve the required information including lattice parameters, periodic boundary conditions, configurations, external field, energy and atomic forces (if needed), dipole moments, polarizabilities, etc. For example, users want to represent the NMA system  that has available atomic forces. The file "configuration" should be written in the following format.![image](https://github.com/zhangylch/FIREANN/blob/main/picture/data.jpg)
+The first line can be an arbitrary character other than a blank line. The next three lines are the lattice vectors defining the unit cell of the system. The fifth line is used to enable(1)/disable(0) the periodic boundary conditions in each direction. In this example, NMA is not a periodic system, the fifth line should be “pbc 0  0  0”. For some gas-surface systems, only the x-y plane is periodic and the corresponding fifth line is “pbc 1  1  0”. The sixth line is the targeted properties used to the training the model, recognizable name including “Energy”, “Dipole” and “POL”. Following N lines (N is the number of atoms in the system, here is 12): the columns from the left to right represent the atomic name, relative atomic mass, coordinates(x, y, z) of the geometry, atomic force vectors (if the force vector is not incorporated in the training, these three columns can be omitted). Next line: Start with " External_field:" and then follow by the external field. 
 
+### Set up parameters
+In the section, we will introduce some hyparameters concerning the field-induced embedded density and NN structures that are essential for obtianing an exact representation. More detailed introduction of all parameters can be found on the manual in the "manual" floder. These parameters are set up in two files "input_nn" and "input_density" saved in the "para" floder of your work directory. Two example of input_nn and input_density are placed in the "example" foleder.
+#### input_nn
+1. batchsize_train=64       # required parameters type: integer
+2. batchsize_val=128       # required parameters type: integer
+(Number of configurations used in each batch for train (batchsize_train) and validation (batchsize_val). Note, this "batchsize_train" is a key parameter concerned with efficiency. Normally, a large enough value is given to achieve high usage of the GPU and lead to higher efficiency in training if you have sufficient data. However, for small training data, a large "batchsize" can lead to a decrease in accuracy, probably owing to the decrease in the number of gradient descents during each epoch. The decrease in accuracy may be compensated by more epochs (increase the "patience_epoch" ) or a larger learning rate. Some detailed testing is required here to achieve a balance of accuracy and efficiency in training. The value of "batch_val" has no effect on accuracy, and thus a larger value is preferred.)
+3. oc_loop = 1          # type: integer
+(Number of iterations used to represent the orbital efficients.)
 
-### Construct a model
+#### input_density
+1. cutoff = 4.5        # type: real number
+(Cutoff distances)
+2. nipsin= 2       # type: integer
+(Maximal angular momenta determine the orbital type (s, p, d ..))
+3. nwave=8          # type: integer
+(Number of radial Gaussian functions. This number should be a power of 2 for better efficiency.)
 
+## MD simulations
+As mentioned earlier, the package interfaces with the LAMMPS framework by creating a new pair_style (fireann).MD simulations can be run in a multi-process or multi-threaded fashion on both GPUs and CPUs. MD simulations based on other MD packages such as i-pi can also be executed through the existing ipi-lammps interface. More details can be found in the manual.
 
 ## References
 If you use this package, please cite these works.
