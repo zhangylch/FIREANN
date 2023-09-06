@@ -1,0 +1,64 @@
+#===============variable=============================
+#=============thermostat=======================
+variable nvt_dt            equal   0.0001
+variable nvt_nsteps        equal   800100
+variable thermo_nsteps     equal   10
+variable coor_nsteps       equal   10
+variable cutoff            equal   6.0
+variable neigh_skin        equal   1.5  # skin for the save the calculation of pbc 
+variable T_start           equal   300.0
+variable T_end             equal   300.0
+variable T_damp            equal   100*${nvt_dt}
+variable seed              equal   999999999
+variable mass1             equal   12.001
+variable mass2             equal   15.9994
+variable mass3             equal   14.007
+variable mass4             equal   1.008
+variable input_structure   string  data.lmp
+variable integerate        string  verlet  # integerate algorithm in MD simulation
+variable poten_function    string  fireann
+variable datatype          string  double # optional float/double
+# parameters for PIMD
+variable bead              equal   4
+#================electric field=================
+variable e_x               equal   0.03         # V/A
+variable e_y               equal   0.0            # V/A
+variable e_z               equal   0.0            # V/A
+#=======================comput rdf========================
+variable compute_style     string  rdf
+variable nbins_rdf         equal   63
+variable nve_dt            equal   0.0002
+variable nve_nsteps        equal   10000
+variable nevery            equal   5
+variable nrepeat           equal   2000
+variable nfreq             equal   10000
+
+units           metal
+# this command should be used prior to setting up a simulation box via the create_box or 
+# read_data commands. Restart files also store this setting.
+dimension       3          # simulation dimensions
+#newton          off        # calculate the pair interaction on each processor
+#processors      3  3  3           # processor on each dimension
+boundary        f   f   f   # p/f/s period/non-period/shrink_warp
+# This command must be used before a simulation is setup via a read_data, read_restart, 
+# or create_box command.
+atom_style      atomic      # properties to store and read
+# The id and map keywords must be specified before a simulation box is defined; 
+# other keywords can be specified any time.
+#atom_modify     map yes   # non-zero atom IDs can be assigned to each atom.
+#processors  1  1  1    # of processors in each dimension of 3d grid overlaying the simulation domain
+read_data       ${input_structure}          # read data from the file 
+mass 1 ${mass1}          # set mass for element 1
+mass 2 ${mass2}          # set mass for element 2
+mass 3 ${mass3}          # set mass for element 3
+mass 4 ${mass4}          # set mass for element 4
+replicate  1  1  1
+
+neighbor ${neigh_skin} nsq   #skin = extra distance beyond force cutoff;style = bin or nsq or multi
+# velocity all create ${T_start} ${seed}  # This pimd fix implements a complete velocity-verlet integrator combined with NH massive chain thermostat, so no other time integration fix should be used.
+pair_style ${poten_function}
+pair_coeff * * ${cutoff} ${datatype} ${e_x} ${e_y} ${e_z}
+   timestep ${nvt_dt}
+   fix 1 all nvt temp ${T_start} ${T_end} ${T_damp}
+   thermo ${thermo_nsteps}
+   run ${nvt_nsteps}

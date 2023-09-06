@@ -1,0 +1,7 @@
+#==============param for atomic energy=======================
+  neigh_atoms=12
+  cutoff=6e0
+  nipsin=2
+  atomtype=["C","O","N","H"]
+  nwave=8
+  #norbit=64
