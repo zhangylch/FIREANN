@@ -46,7 +46,7 @@ As mentioned earlier, the package interfaces with the LAMMPS framework by creati
 
 ## References
 If you use this package, please cite these works.
-1. FIREANN model: Yaolong Zhang and Bin Jiang arXiv:2304.07712.
+1. FIREANN model: Yaolong Zhang and Bin Jiang *Nat. Commun. 6424, (2023)*.
 2. The original EANN model: Yaolong Zhang, Ce Hu and Bin Jiang *J. Phys. Chem. Lett.* 10, 4962-4967 (2019).
 3. The theory of REANN model: Yaolong Zhang, Junfan Xia and Bin Jiang *Phys. Rev. Lett.* 127, 156002 (2021).
 4. The details about the implementation of REANN: Yaolong Zhang, Junfan Xia and Bin Jiang *J. Chem. Phys.* 156, 114801 (2022).
