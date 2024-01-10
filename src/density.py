@@ -39,20 +39,14 @@ class GetDensity(torch.nn.Module):
         # Tensor: rs[nwave],inta[nwave] 
         # Tensor: distances[neighbour*numatom*nbatch,1]
         # return: radial[neighbour*numatom*nbatch,nwave]
-        distances=distances.view(-1,1)
-        radial=torch.empty((distances.shape[0],self.rs.shape[1]),dtype=distances.dtype,device=distances.device)
-        for itype in range(self.rs.shape[0]):
-            mask = (species_ == itype)
-            ele_index = torch.nonzero(mask).view(-1)
-            if ele_index.shape[0]>0:
-                part_radial=torch.exp(self.inta[itype:itype+1]*torch.square \
-                (distances.index_select(0,ele_index)-self.rs[itype:itype+1]))
-                radial.masked_scatter_(mask.view(-1,1),part_radial)
+        rs=self.rs.index_select(0,species_)
+        inta=self.inta.index_select(0,species_)
+        radial=torch.exp(inta*torch.square(distances[:,None]-rs))
         return radial
     
-    def cutoff_cosine(self,distances):
+    def cutoff_cos(self,distances):
         # assuming all elements in distances are smaller than cutoff
-        # return cutoff_cosine[neighbour*numatom*nbatch]
+        # return cutoff_cos[neighbour*numatom*nbatch]
         return torch.square(0.5 * torch.cos(distances * (np.pi / self.cutoff)) + 0.5)
     
     def angular(self,dist_vec,f_cut):
@@ -89,18 +83,20 @@ class GetDensity(torch.nn.Module):
         shift_values=shifts.view(-1,3).index_select(0,padding_mask)
         dist_vec = selected_cart[0] - selected_cart[1] + shift_values
         distances = torch.linalg.norm(dist_vec,dim=-1)
-        #dist_vec=dist_vec/distances.view(-1,1)
+        dist_vec=dist_vec/distances.view(-1,1)
         species_ = species.index_select(0,atom_index12[1])
-        orbital = oe.contract("ji,ik -> ijk",self.angular(dist_vec,self.cutoff_cosine(distances)),\
+        dcut=self.cutoff_cos(distances)
+        orbital = oe.contract("ji,ik -> ijk",self.angular(dist_vec,self.cutoff_cos(distances)),\
         self.gaussian(distances,species_),backend="torch").contiguous()
         orb_coeff=torch.empty((totnatom,self.rs.shape[1]),dtype=cart.dtype,device=cart.device)
         mask=(species>-0.5).view(-1)
         orb_coeff[mask,:]=self.params.index_select(0,species[torch.nonzero(mask).view(-1)])
         hyper=self.hyper.index_select(0,self.index_para.to(torch.long))
-        density=self.obtain_orb_coeff(0,totnatom,orbital,ef_orbital,atom_index12,orb_coeff,hyper)
+        density,worbital=self.obtain_orb_coeff(0,totnatom,orbital,ef_orbital,atom_index12,orb_coeff,hyper)
         for ioc_loop, (_, m) in enumerate(self.ocmod.items()):
             orb_coeff = orb_coeff + m(density,species)
-            density = self.obtain_orb_coeff(ioc_loop+1,totnatom,orbital,ef_orbital,atom_index12,orb_coeff,hyper)
+            orbital=orbital+worbital.index_select(0,atom_index12[1])*dcut[:,None,None]
+            density,worbital = self.obtain_orb_coeff(ioc_loop+1,totnatom,orbital,ef_orbital,atom_index12,orb_coeff,hyper)
         return density
  
     def obtain_orb_coeff(self,iteration:int,totnatom:int,orbital,ef_orbital,atom_index12,orb_coeff,hyper):
@@ -108,4 +104,6 @@ class GetDensity(torch.nn.Module):
         worbital=oe.contract("ijk,ik->ijk", orbital,expandpara,backend="torch").contiguous()
         ef_orbital=torch.index_add(ef_orbital,0,atom_index12[0],worbital)
         hyper_worbital=oe.contract("ijk,jkm -> ijm",ef_orbital,hyper,backend="torch").contiguous()
-        return torch.sum(torch.square(hyper_worbital),dim=1)
+        density=torch.sum(torch.square(hyper_worbital),dim=1)       
+        return density,ef_orbital
+
