@@ -37,8 +37,8 @@ maxneigh=25000  # maximal number of the neighbor atoms for the configuration (su
 atomtype=["H","O"]
 # save the lattic parameters
 num=0
-nbatch=5
-batchsize=2
+nbatch=2
+batchsize=8
 with open("configuration",'r') as f1:
     species=[]
     cart=[]
@@ -86,9 +86,11 @@ with open("configuration",'r') as f1:
     # neigh list 
     num=0
     totnum=ef.shape[0]
+    print(totnum)
     for m in range(nbatch):
         neigh_list=torch.empty(2,0).to(device).to(torch.long)
         shifts=torch.empty(0,3).to(device).to(torch_dtype)
+        index_cell=ti=torch.empty(0).to(device).to(torch.long)
         num_up=min(num+batchsize,totnum)
         bcart=cart[num:num_up]
         bpbc=pbc[num:num_up]
@@ -98,10 +100,11 @@ with open("configuration",'r') as f1:
         c_cart=[]
         for i in range(num_up-num):
             getneigh.init_neigh(cutoff,cutoff/2.0,bcell[i].T)
-            cart,neighlist,shiftimage,scutnum=getneigh.get_neigh(bcart[i].T,maxneigh)
-            c_cart.append(cart.T)
+            coor,neighlist,shiftimage,scutnum=getneigh.get_neigh(bcart[i].T,maxneigh)
+            index_cell=torch.cat((index_cell,torch.ones(scutnum).to(device).to(torch.long)*i),0)
+            c_cart.append(coor.T)
             tmp_neigh=neighlist+i*bcart.shape[1]
-            neigh_list=torch.cat((neigh_list,torch.from_numpy(tmp_neigh)[:,:scutnum].to(device).to(torch_dtype)),1)
+            neigh_list=torch.cat((neigh_list,torch.from_numpy(tmp_neigh)[:,:scutnum].to(device).to(torch.long)),1)
             shifts=torch.cat((shifts,torch.from_numpy(shiftimage).T[:scutnum].to(device).to(torch_dtype)),0)
             num+=1
         
@@ -110,9 +113,13 @@ with open("configuration",'r') as f1:
         bef.requires_grad=False
         bcell.requires_grad=True
         bcart.requires_grad=False
-        varene,stress=calculator.get_ene_stress(bcell,bcart,bef,neigh_list,shifts,\
-        bspecies.view(-1))
+        varene,stress=calculator.get_ene_stress(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
         varene=varene.detach().cpu().numpy()
         stress=stress.detach().cpu().numpy()
-        for i in range(bef.shape[0]):
-            print(abprop[init_num+i][0],varene[i])
+        bcell.requires_grad=False
+        bcell[:,1,0]=bcell[:,1,0]-1e-4
+        varene1,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
+        bcell[:,1,0]=bcell[:,1,0]+2e-4
+        varene2,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
+        stress1=-(varene2-varene1)/2e-4
+        print("hello",stress[:,1,0],stress1)
