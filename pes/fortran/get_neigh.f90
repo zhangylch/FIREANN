@@ -40,7 +40,7 @@ subroutine get_neigh(cart,coor,atomindex,shifts,maxneigh,numatom,scutnum)
          coor(:,iatom)=coor(:,iatom)-oriminv
        end do
 ! obtain image 
-       l=1
+       l=0
        do i=-nimage(3),nimage(3)
          do j=-nimage(2),nimage(2)
            do k=-nimage(1),nimage(1)

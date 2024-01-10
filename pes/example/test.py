@@ -34,12 +34,12 @@ calculator=Calculator(device,torch_dtype)
 cutoff=calculator.cutoff
 maxneigh=25000  # maximal number of the neighbor atoms for the configuration (summation of neighbor atoms for each center atom)
 # same as the atomtype in the file input_density
-atomtype=["C","O","N","H"]
+atomtype=["H","O"]
 # save the lattic parameters
 num=0
 nbatch=5
 batchsize=2
-with open("../../data/liquid_water/train/configuration",'r') as f1:
+with open("configuration",'r') as f1:
     species=[]
     cart=[]
     cell=[]
@@ -98,14 +98,14 @@ with open("../../data/liquid_water/train/configuration",'r') as f1:
         c_cart=[]
         for i in range(num_up-num):
             getneigh.init_neigh(cutoff,cutoff/2.0,bcell[i].T)
-            cart,neighlist,shiftimage,scutnum=get_neigh(bcart[i].T,maxneigh)
+            cart,neighlist,shiftimage,scutnum=getneigh.get_neigh(bcart[i].T,maxneigh)
             c_cart.append(cart.T)
             tmp_neigh=neighlist+i*bcart.shape[1]
-            neigh_list=torch.cat((neigh_list,torch.from_numpy(tmp_neigh).to(device).to(torch_dtype)),1)
-            shifts=torch.cat((shifts,torch.from_numpy(shiftimage).to(device).to(torch_dtype)),0)
+            neigh_list=torch.cat((neigh_list,torch.from_numpy(tmp_neigh)[:,:scutnum].to(device).to(torch_dtype)),1)
+            shifts=torch.cat((shifts,torch.from_numpy(shiftimage).T[:scutnum].to(device).to(torch_dtype)),0)
             num+=1
         
-        bcart=torch.from_numpy(c_cart).contiguous().to(device).to(torch_dtype)
+        bcart=torch.from_numpy(np.array(c_cart)).contiguous().to(device).to(torch_dtype)
         bcell=torch.from_numpy(bcell).to(device).to(torch_dtype)
         bef.requires_grad=False
         bcell.requires_grad=True
@@ -116,5 +116,3 @@ with open("../../data/liquid_water/train/configuration",'r') as f1:
         stress=stress.detach().cpu().numpy()
         for i in range(bef.shape[0]):
             print(abprop[init_num+i][0],varene[i])
-            print(abprop[init_num+i][1],dipole[i])
-            print(abprop[init_num+i][2],pol[i])
