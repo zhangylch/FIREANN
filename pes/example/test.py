@@ -117,9 +117,9 @@ with open("configuration",'r') as f1:
         varene=varene.detach().cpu().numpy()
         stress=stress.detach().cpu().numpy()
         bcell.requires_grad=False
-        bcell[:,1,0]=bcell[:,1,0]-1e-4
+        bcell[:,1,1]=bcell[:,1,1]-1e-4
         varene1,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
-        bcell[:,1,0]=bcell[:,1,0]+2e-4
+        bcell[:,1,1]=bcell[:,1,1]+2e-4
         varene2,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
         stress1=-(varene2-varene1)/2e-4
-        print("hello",stress[:,1,0],stress1)
+        print("hello",stress[:,1,1],stress1)
