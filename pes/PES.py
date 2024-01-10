@@ -94,7 +94,7 @@ class PES(torch.nn.Module):
         self.nnmod=NNMod(maxnumtype,outputneuron,atomtype,nblock,list(nl),dropout_p,actfun,table_norm=table_norm)
      
     def forward(self,cell,cart,ef,index_cell,neigh_list,shifts,species):
-        shifts=torch.einsum("ij,jk ->ik",shifts,cell[index_cell])
+        shifts=torch.einsum("ij,ijk ->ik",shifts,cell[index_cell])
         density=self.density(cart,ef,neigh_list,shifts,species)
         atomic_energy = self.nnmod(density,species)+self.nnmod.initpot
         return atomic_energy
