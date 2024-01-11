@@ -158,6 +158,7 @@ special = {'cp2k': 'CP2K',
            'qchem': 'QChem',
            'tip3p': 'TIP3P',
            'tip4p': 'TIP4P',
+           'fireann': 'FIREANN'},
            'reann': 'REANN'}
 
 
