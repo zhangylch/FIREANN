@@ -3,6 +3,7 @@ import torch
 from gpu_sel import *
 from calculate import *
 from write_format import *
+import getneigh as getneigh
 import re
 # unit
 length_a_au=1/5.29177208590000E-01
@@ -30,13 +31,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # dtype
 torch_dtype=torch.double
 calculator=Calculator(device,torch_dtype)
+cutoff=calculator.cutoff
+maxneigh=25000  # maximal number of the neighbor atoms for the configuration (summation of neighbor atoms for each center atom)
 # same as the atomtype in the file input_density
-atomtype=["C","O","N","H"]
+atomtype=["H","O"]
 # save the lattic parameters
 num=0
-nbatch=20
-batchsize=10
-with open("../../data/NMA/train/configuration",'r') as f1:
+nbatch=2
+batchsize=8
+with open("configuration",'r') as f1:
     species=[]
     cart=[]
     cell=[]
@@ -75,41 +78,48 @@ with open("../../data/NMA/train/configuration",'r') as f1:
             cart[num].append(tmp1[0:3])
             species[num].append(atomtype.index(tmp[0]))
         num+=1
+    cell=np.array(cell)
+    cart=np.array(cart)
     species=torch.from_numpy(np.array(species)).to(device)  
     pbc=torch.from_numpy(np.array(pbc)).to(device).to(torch.long).view(-1,3)
-    cart=torch.from_numpy(np.array(cart)).to(device).to(torch_dtype)  
-    cell=torch.from_numpy(np.array(cell)).to(device).to(torch_dtype)
     ef=torch.from_numpy(np.array(ef)).to(device).to(torch_dtype).view(-1,3)
     # neigh list 
     num=0
     totnum=ef.shape[0]
+    print(totnum)
     for m in range(nbatch):
         neigh_list=torch.empty(2,0).to(device).to(torch.long)
         shifts=torch.empty(0,3).to(device).to(torch_dtype)
+        index_cell=ti=torch.empty(0).to(device).to(torch.long)
         num_up=min(num+batchsize,totnum)
         bcart=cart[num:num_up]
         bpbc=pbc[num:num_up]
         bcell=cell[num:num_up]
         bspecies=species[num:num_up]
         bef=ef[num:num_up]
+        c_cart=[]
         for i in range(num_up-num):
-            holder=calculator.get_neighlist(bpbc[i],bcart[i],bcell[i])
-            tmp_neigh=holder[0]+i*cart.shape[1]
-            neigh_list=torch.cat((neigh_list,tmp_neigh),1)
-            shifts=torch.cat((shifts,holder[1]),0)
+            getneigh.init_neigh(cutoff,cutoff/2.0,bcell[i].T)
+            coor,neighlist,shiftimage,scutnum=getneigh.get_neigh(bcart[i].T,maxneigh)
+            index_cell=torch.cat((index_cell,torch.ones(scutnum).to(device).to(torch.long)*i),0)
+            c_cart.append(coor.T)
+            tmp_neigh=neighlist+i*bcart.shape[1]
+            neigh_list=torch.cat((neigh_list,torch.from_numpy(tmp_neigh)[:,:scutnum].to(device).to(torch.long)),1)
+            shifts=torch.cat((shifts,torch.from_numpy(shiftimage).T[:scutnum].to(device).to(torch_dtype)),0)
             num+=1
         
-        bef.requires_grad=True
+        bcart=torch.from_numpy(np.array(c_cart)).contiguous().to(device).to(torch_dtype)
+        bcell=torch.from_numpy(bcell).to(device).to(torch_dtype)
+        bef.requires_grad=False
+        bcell.requires_grad=True
         bcart.requires_grad=False
-        varene,dipole=calculator.get_ene_dipole(bcart,bef,neigh_list,shifts,\
-        bspecies.view(-1))
-        pol=calculator.get_pol(bcart,bef,neigh_list,shifts,bspecies.view(-1))[0]
+        varene,stress=calculator.get_ene_stress(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
         varene=varene.detach().cpu().numpy()
-        dipole=dipole.detach().cpu().numpy()
-        print(pol)
-        pol=pol.view(-1,9).detach().cpu().numpy()
-        init_num=num-bef.shape[0]
-        for i in range(bef.shape[0]):
-            print(abprop[init_num+i][0],varene[i])
-            print(abprop[init_num+i][1],dipole[i])
-            print(abprop[init_num+i][2],pol[i])
+        stress=stress.detach().cpu().numpy()
+        bcell.requires_grad=False
+        bcell[:,1,1]=bcell[:,1,1]-1e-4
+        varene1,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
+        bcell[:,1,1]=bcell[:,1,1]+2e-4
+        varene2,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
+        stress1=-(varene2-varene1)/2e-4
+        print("hello",stress[:,1,1],stress1)
