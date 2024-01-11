@@ -42,7 +42,7 @@ In the section, we will introduce some hyparameters concerning the field-induced
 (Number of radial Gaussian functions. This number should be a power of 2 for better efficiency.)
 
 ## MD simulations
-As mentioned earlier, the package interfaces with the LAMMPS framework by creating a new pair_style (fireann).MD simulations can be run in a multi-process or multi-threaded fashion on both GPUs and CPUs. MD simulations based on other MD packages such as i-pi can also be executed through the existing ipi-lammps interface. In addition, MD simulation can also be performed by the ASE interface. More details can be found in the manual
+As mentioned earlier, the package interfaces with the LAMMPS framework by creating a new pair_style (fireann).MD simulations can be run in a multi-process or multi-threaded fashion on both GPUs and CPUs. MD simulations based on other MD packages such as i-pi can also be executed through the existing ipi-lammps interface. In addition, MD simulation can also be performed by the ASE interface. More details can be found in the manual.
 
 ## References
 If you use this package, please cite these works.
