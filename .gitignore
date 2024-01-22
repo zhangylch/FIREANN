@@ -1,5 +1,6 @@
-**/__pycache__/
+__pycache__/
 **/*.so 
 **/*.pyf
 **/nn.err
 **/job-mpi.sh
+
