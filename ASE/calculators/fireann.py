@@ -48,6 +48,7 @@ class FIREANN(Calculator):
         symbols = list(self.atoms.symbols)
         species = [self.atomtype.index(i) for i in symbols]
         species = torch.tensor(species,device=self.device,dtype=torch.long)
+        disp_cell = torch.zeros_like(self.tcell)
         if "dipole" in properties:
             self.ef.requires_grad=True
         else:
@@ -59,19 +60,19 @@ class FIREANN(Calculator):
             cart.requires_grad=False
 
         if "stress" in properties:
-            self.tcell.requires_grad=True
+            disp_cell.requires_grad=True
         else:
-            self.tcell.requires_grad=False
-        atomic_ene=self.pes(self.tcell,cart,self.ef,torch.zeros(scutnum,device=self.device,dtype=torch.long),neighlist,shifts,species)
+            disp_cell.requires_grad=False
+        atomic_ene=self.pes(self.tcell,disp_cell,cart,self.ef,torch.zeros(scutnum,device=self.device,dtype=torch.long),neighlist,shifts,species)
         if "energies" in properties: self.results['energies'] = atomic_ene.detach().numpy()
         energy = torch.sum(atomic_ene)
         self.results['energy'] = float(energy.detach().numpy())
         if "forces" in properties and "stress" in properties:
-            forces,stress = -torch.autograd.grad(energy,[cart,self.tcell])
+            forces,stress = -torch.autograd.grad(energy,[cart,disp_cell])
             forces = forces.squeeze(0).detach().numpy()
             self.results['forces'] = forces
             stress = stress.squeeze(0).detach().numpy()
-            self.results['stress'] = stress
+            self.results['stress'] = stress/(self.tcell[:,0,0]*self.tcell[:,1,1]*self.tcell[:,2,2])
 
         if "forces" in properties and "stress" not in properties:
             forces =-torch.autograd.grad(energy,cart)[0].squeeze(0)
@@ -79,9 +80,9 @@ class FIREANN(Calculator):
             self.results['forces'] = forces
 
         if "stress" in properties and "forces" not in properties:
-            stress = -torch.autograd.grad(energy,self.tcell)[0].squeeze(0)
+            stress = -torch.autograd.grad(energy,disp_cell)[0].squeeze(0)
             stress = stress.detach().numpy()
-            self.results['stress'] = stress
+            self.results['stress'] = stress/(self.tcell[:,0,0]*self.tcell[:,1,1]*self.tcell[:,2,2])
 
         if "dipole" in properties:
             dipole=torch.autograd.grad(energy,self.ef)[0].squeeze(0)

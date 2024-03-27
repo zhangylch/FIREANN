@@ -90,7 +90,7 @@ with open("configuration",'r') as f1:
     for m in range(nbatch):
         neigh_list=torch.empty(2,0).to(device).to(torch.long)
         shifts=torch.empty(0,3).to(device).to(torch_dtype)
-        index_cell=ti=torch.empty(0).to(device).to(torch.long)
+        index_cell=torch.empty(0).to(device).to(torch.long)
         num_up=min(num+batchsize,totnum)
         bcart=cart[num:num_up]
         bpbc=pbc[num:num_up]

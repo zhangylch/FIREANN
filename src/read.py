@@ -185,7 +185,8 @@ if numpoint[1]==0:
     numpoint[1]=ntotpoint-numpoint[0]
 
 # parallel process the variable  
-gpu_sel()
+os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Used >gpu_info')
+gpu_sel(local_size)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu",local_rank)
 #a=torch.empty(10000,device=device)  # used for apply some memory to prevent two process on the smae gpu
 world_size = int(os.environ.get("WORLD_SIZE"))
