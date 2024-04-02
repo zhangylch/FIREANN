@@ -75,7 +75,7 @@ class GetDensity(torch.nn.Module):
         self.ef_para).expand(nlocal,-1,-1)
         neigh_species=local_species.index_select(0,neigh_list)
         selected_cart = cart.index_select(0, atom_index.view(-1)).view(2, -1, 3)
-        dist_vec = selected_cart[0] - selected_cart[1]
+        dist_vec = selected_cart[1] - selected_cart[0]
         distances = torch.linalg.norm(dist_vec,dim=-1)
         dist_vec=dist_vec/distances.view(-1,1)
         dcut=self.cutoff_cos(distances)

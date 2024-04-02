@@ -68,23 +68,23 @@ class FIREANN(Calculator):
         energy = torch.sum(atomic_ene)
         self.results['energy'] = float(energy.detach().numpy())
         if "forces" in properties and "stress" in properties:
-            forces,stress = -torch.autograd.grad(energy,[cart,disp_cell])
-            forces = forces.squeeze(0).detach().numpy()
+            forces,virial = torch.autograd.grad(energy,[cart,disp_cell])
+            forces = torch.neg(forces).squeeze(0).detach().numpy()
             self.results['forces'] = forces
-            stress = stress.squeeze(0).detach().numpy()
-            self.results['stress'] = stress/(self.tcell[:,0,0]*self.tcell[:,1,1]*self.tcell[:,2,2])
+            virial = virial.squeeze(0).detach().numpy()
+            self.results['stress'] =virial/self.atoms.get_volume()
 
         if "forces" in properties and "stress" not in properties:
-            forces =-torch.autograd.grad(energy,cart)[0].squeeze(0)
-            forces = forces.detach().numpy()
+            forces = torch.autograd.grad(energy,cart)[0].squeeze(0)
+            forces = torch.neg(forces).detach().numpy()
             self.results['forces'] = forces
 
         if "stress" in properties and "forces" not in properties:
-            stress = -torch.autograd.grad(energy,disp_cell)[0].squeeze(0)
-            stress = stress.detach().numpy()
-            self.results['stress'] = stress/(self.tcell[:,0,0]*self.tcell[:,1,1]*self.tcell[:,2,2])
+            virial = torch.autograd.grad(energy,disp_cell)[0].squeeze(0)
+            virial = virial.detach().numpy()
+            self.results['stress'] = virial/self.atoms.get_volume()
 
         if "dipole" in properties:
-            dipole=torch.autograd.grad(energy,self.ef)[0].squeeze(0)
+            dipole = torch.autograd.grad(energy,self.ef)[0].squeeze(0)
             dipole = dipole.detach().numpy()
             self.results['dipole'] = dipole

@@ -81,7 +81,7 @@ class GetDensity(torch.nn.Module):
         atom_index12=(atom_index.view(2,-1)+self_mol_index)[:,padding_mask].contiguous()
         selected_cart = cart_.index_select(0, atom_index12.view(-1)).view(2, -1, 3)
         shift_values=shifts.view(-1,3).index_select(0,padding_mask)
-        dist_vec = selected_cart[0] - selected_cart[1] + shift_values
+        dist_vec = selected_cart[1] - selected_cart[0] + shift_values
         distances = torch.linalg.norm(dist_vec,dim=-1)
         dist_vec=dist_vec/distances.view(-1,1)
         species_ = species.index_select(0,atom_index12[1])

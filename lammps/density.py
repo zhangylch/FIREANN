@@ -74,7 +74,7 @@ class GetDensity(torch.nn.Module):
         ef_orbital = torch.einsum("ji,k->ijk",self.angular(ef.view(1,-1),torch.ones(1)),\
         self.ef_para).expand(nlocal,-1,-1)
         selected_cart = cart.index_select(0, atom_index.view(-1)).view(2, -1, 3)
-        dist_vec = selected_cart[0] - selected_cart[1]
+        dist_vec = selected_cart[1] - selected_cart[0]
         distances = torch.linalg.norm(dist_vec,dim=-1)
         dist_vec=dist_vec/distances.view(-1,1)
         orbital = torch.einsum("ji,ik -> ijk",self.angular(dist_vec,self.cutoff_cos(distances)),\

@@ -43,7 +43,7 @@ def neighbor_pairs(pbc, coordinates, species, cell, cutoff:float, neigh_atoms:in
 
     # step 5, compute distances, and find all pairs within cutoff
     selected_coordinates = coordinates[:, p12_all.view(-1)].view(num_mols, 2, -1, 3)
-    distances = (selected_coordinates[:, 0, ...] - selected_coordinates[:, 1, ...] + shifts_all).\
+    distances = (selected_coordinates[:, 1, ...] - selected_coordinates[:, 0, ...] + shifts_all).\
     norm(2, -1)
     padding_mask = padding_mask[:, p12_all.view(-1)].view(num_mols, 2, -1).any(1)
     distances.masked_fill_(padding_mask, math.inf)  # dim=num_mols*(nshift*natom*natom)
