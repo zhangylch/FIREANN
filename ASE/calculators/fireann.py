@@ -75,7 +75,6 @@ class FIREANN(Calculator):
             self.results['forces'] = forces
             virial = virial.squeeze(0).detach().numpy()
             stress = virial/self.atoms.get_volume()
-            print(stress,self.atoms.get_volume())
             stress_voigt = full_3x3_to_voigt_6_stress(stress)
             self.results['stress'] = stress_voigt
 
