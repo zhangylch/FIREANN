@@ -8,6 +8,7 @@ import re
 #from gpu_sel import *
 from ase.data import chemical_symbols, atomic_numbers
 from ase.units import Bohr
+from ase.stress import full_3x3_to_voigt_6_stress
 from ase.calculators.calculator import (Calculator, all_changes,
                                         PropertyNotImplementedError)
 
@@ -15,7 +16,7 @@ class FIREANN(Calculator):
 
     implemented_properties = ['energy', 'forces', 'stress', 'dipole','energies']
 
-    def __init__(self, atomtype, maxneigh, ef, getneigh, nn = 'PES.pt',device="cpu",dtype=torch.float32,**kwargs):
+    def __init__(self, atomtype, maxneigh, ef, getneigh, properties=['energy', 'forces'],nn = 'PES.pt',device="cpu",dtype=torch.float32,**kwargs):
         Calculator.__init__(self, **kwargs)
         self.device = torch.device(device)
         self.dtype = dtype
@@ -29,6 +30,7 @@ class FIREANN(Calculator):
         self.pes=torch.jit.optimize_for_inference(pes)
         self.ef=torch.from_numpy(ef).to(self.device).to(self.dtype).unsqueeze(0)
         self.tcell=[]
+        self.properties=properties
         #self.pes=torch.compile(pes)
     
     def calculate(self,atoms=None, properties=['energy', 'forces'],
@@ -49,42 +51,47 @@ class FIREANN(Calculator):
         species = [self.atomtype.index(i) for i in symbols]
         species = torch.tensor(species,device=self.device,dtype=torch.long)
         disp_cell = torch.zeros_like(self.tcell)
-        if "dipole" in properties:
+        if "dipole" in self.properties:
             self.ef.requires_grad=True
         else:
             self.ef.requires_grad=False
 
-        if "forces" in properties:
+        if "forces" in self.properties:
             cart.requires_grad=True
         else:
             cart.requires_grad=False
 
-        if "stress" in properties:
+        if "stress" in self.properties:
             disp_cell.requires_grad=True
         else:
             disp_cell.requires_grad=False
         atomic_ene=self.pes(self.tcell,disp_cell,cart,self.ef,torch.zeros(scutnum,device=self.device,dtype=torch.long),neighlist,shifts,species)
-        if "energies" in properties: self.results['energies'] = atomic_ene.detach().numpy()
+        if "energies" in self.properties: self.results['energies'] = atomic_ene.detach().numpy()
         energy = torch.sum(atomic_ene)
         self.results['energy'] = float(energy.detach().numpy())
-        if "forces" in properties and "stress" in properties:
+        if "forces" in self.properties and "stress" in self.properties:
             forces,virial = torch.autograd.grad(energy,[cart,disp_cell])
             forces = torch.neg(forces).squeeze(0).detach().numpy()
             self.results['forces'] = forces
             virial = virial.squeeze(0).detach().numpy()
-            self.results['stress'] =virial/self.atoms.get_volume()
+            stress = virial/self.atoms.get_volume()
+            print(stress,self.atoms.get_volume())
+            stress_voigt = full_3x3_to_voigt_6_stress(stress)
+            self.results['stress'] = stress_voigt
 
-        if "forces" in properties and "stress" not in properties:
+        if "forces" in self.properties and "stress" not in self.properties:
             forces = torch.autograd.grad(energy,cart)[0].squeeze(0)
             forces = torch.neg(forces).detach().numpy()
             self.results['forces'] = forces
 
-        if "stress" in properties and "forces" not in properties:
+        if "stress" in self.properties and "forces" not in self.properties:
             virial = torch.autograd.grad(energy,disp_cell)[0].squeeze(0)
             virial = virial.detach().numpy()
-            self.results['stress'] = virial/self.atoms.get_volume()
+            stress = virial/self.atoms.get_volume()
+            stress_voigt = full_3x3_to_voigt_6_stress(stress)
+            self.results['stress'] = stress_voigt
 
-        if "dipole" in properties:
+        if "dipole" in self.properties:
             dipole = torch.autograd.grad(energy,self.ef)[0].squeeze(0)
             dipole = dipole.detach().numpy()
             self.results['dipole'] = dipole
