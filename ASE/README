@@ -1,8 +1,0 @@
------------------------------------------notice--------------------------------------------------
-fireann.py is the codes to interface FIREANN with ase. If you want to use this interface, you need to copy the calculator.py and fireann.py to Path/ase/calculators/ folder. we add the name "fireann" and "'fireann':'REANN'" to the name and special list located in line 128-137 of calculator.py	
-
-***Very important thing***:
-(1) Read the ase_fireann.py to learn how to use this interface.
-
--------------------------------------------------------------------------------------------------
-ase_fireann.py is the example how to use the ase with the eann and fireann.

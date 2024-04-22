@@ -43,7 +43,7 @@ for atoms in configuration:
     traj = Trajectory('co+water+au.traj', 'w', atoms)
     dyn = NPTBerendsen(atoms, timestep=0.1 * units.fs, temperature_K=300,
                    taut=500 * units.fs, pressure_au=1.01325 * units.bar, fixcm=True,
-                   taup=1000 * units.fs, compressibility_au=5e-7 / units.bar, logfile="md.log",loginterval=10)
+                   taup=1000 * units.fs, compressibility_au=1e-5 / units.bar, logfile="md.log",loginterval=10)
     dyn.attach(traj.write, interval=200)
     dyn.run(steps=200000)
     traj.close()
