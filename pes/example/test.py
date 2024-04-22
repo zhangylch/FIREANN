@@ -42,6 +42,7 @@ batchsize=8
 with open("configuration",'r') as f1:
     species=[]
     cart=[]
+    force=[]
     cell=[]
     pbc=[]
     ef=[]
@@ -50,7 +51,8 @@ with open("configuration",'r') as f1:
         string=f1.readline()
         if not string: break
         species.append([])
-        cart.append([])
+	cart.append([])
+        force.append([])
         cell.append([])
         pbc.append([])
         ef.append([])
@@ -76,10 +78,12 @@ with open("configuration",'r') as f1:
             tmp=string.split()
             tmp1=list(map(float,tmp[2:8]))
             cart[num].append(tmp1[0:3])
+            force[num].append(tmp1[3:6])
             species[num].append(atomtype.index(tmp[0]))
         num+=1
     cell=np.array(cell)
     cart=np.array(cart)
+    force=np.array(force)
     species=torch.from_numpy(np.array(species)).to(device)  
     pbc=torch.from_numpy(np.array(pbc)).to(device).to(torch.long).view(-1,3)
     ef=torch.from_numpy(np.array(ef)).to(device).to(torch_dtype).view(-1,3)
@@ -93,6 +97,7 @@ with open("configuration",'r') as f1:
         index_cell=torch.empty(0).to(device).to(torch.long)
         num_up=min(num+batchsize,totnum)
         bcart=cart[num:num_up]
+        bforce=force[num:num_up]
         bpbc=pbc[num:num_up]
         bcell=cell[num:num_up]
         bspecies=species[num:num_up]
@@ -108,18 +113,19 @@ with open("configuration",'r') as f1:
             shifts=torch.cat((shifts,torch.from_numpy(shiftimage).T[:scutnum].to(device).to(torch_dtype)),0)
             num+=1
         
+        disp_cell
         bcart=torch.from_numpy(np.array(c_cart)).contiguous().to(device).to(torch_dtype)
         bcell=torch.from_numpy(bcell).to(device).to(torch_dtype)
+        disp_cell=torch.zeros_like(bcell)
         bef.requires_grad=False
-        bcell.requires_grad=True
-        bcart.requires_grad=False
-        varene,stress=calculator.get_ene_stress(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
-        varene=varene.detach().cpu().numpy()
-        stress=stress.detach().cpu().numpy()
-        bcell.requires_grad=False
-        bcell[:,1,1]=bcell[:,1,1]-1e-4
-        varene1,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
-        bcell[:,1,1]=bcell[:,1,1]+2e-4
-        varene2,=calculator.get_ene(bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
-        stress1=-(varene2-varene1)/2e-4
-        print("hello",stress[:,1,1],stress1)
+        bcart.requires_grad=True
+        force=calculator.get_force(disp_cell,bcell,bcart,bef,index_cell,neigh_list,shifts,bspecies.view(-1))
+        for i in range(num_up-num_save):
+            if torch.max(bforce[i]-force[i])<1.0 and torch.sqrt(torch.mean(torch.square(bforce[i]-force[i]))) < 0.3
+                write_format(fileobj,192,bpbc[i].cpu().numpy(),atom[num_save+i],np.array(mass[num_save+i]),\
+                bcart[i].detach().cpu().numpy(),bef[i].detach().cpu().numpy(),abprop[num_save+i],Prop_list,bcell[i].cpu().numpy(),\
+                force=bforce[i])
+            else:
+                write_format(fileobj1,662,bpbc[i].cpu().numpy(),atom[num_save+i],np.array(mass[num_save+i]),\
+                bcart[i].detach().cpu().numpy(),bef[i].detach().cpu().numpy(),abprop[num_save+i],Prop_list,bcell[i].cpu().numpy(),\
+                force=bforce[i])

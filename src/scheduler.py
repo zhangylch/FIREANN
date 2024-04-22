@@ -32,7 +32,7 @@ class Scheduler():
                 self.best_loss=loss.item()
                 if self.rank==0:
                     # begin to update the SWA model
-                    self.save_pes(self.model)
+                    self.save_pes(self.swa_model.module)
                     # store the checkpoint at each epoch
                     self.checkpoint(self.swa_model,"SWA_REANN.pth")
                     self.checkpoint(self.model,"REANN.pth")
