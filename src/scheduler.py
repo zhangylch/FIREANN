@@ -21,7 +21,7 @@ class Scheduler():
         return self.forward(lr,loss)
  
     def forward(self,lr,loss):
-        if loss>25.0*self.best_loss or loss.isnan():
+        if loss>200.0*self.best_loss or loss.isnan():
             dist.barrier()
             self.restart(self.model,"REANN.pth")
             self.restart(self.swa_model,"SWA_REANN.pth")
@@ -32,7 +32,7 @@ class Scheduler():
                 self.best_loss=loss.item()
                 if self.rank==0:
                     # begin to update the SWA model
-                    self.save_pes(self.swa_model.module)
+                    self.save_pes(self.model)
                     # store the checkpoint at each epoch
                     self.checkpoint(self.swa_model,"SWA_REANN.pth")
                     self.checkpoint(self.model,"REANN.pth")

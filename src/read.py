@@ -171,9 +171,6 @@ for i,iprop in enumerate(abprop):
     abprop[i]=np.array(iprop)
     
 initpot=0.0
-if "Energy" in Prop_list:
-    initpot=np.sum(abprop[0][:])/np.sum(numatoms)
-    abprop[0]=abprop[0]-initpot*numatoms.reshape(-1,1)
 # get the total number configuration for train/val
 ntotpoint=0
 for ipoint in numpoint:
